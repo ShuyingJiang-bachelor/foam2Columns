@@ -136,20 +136,11 @@ int main(int argc, char *argv[])
                     Info<< "outputFile =" << outputFile << endl;
                     OFstream foam2ColumnsLagrangian(outputFile);
 
-                    foam2ColumnsLagrangian
-                        << "x" << "\t"
-                        << "y" << "\t"
-                        << "z" << "\t"
-                        << "origId" << "\t"
-                        << "origProc";
-
-                    forAll (selectedLagrangianFields, fieldI)
-                    {
-                        foam2ColumnsLagrangian << "\t" << selectedLagrangianFields[fieldI];
-                    }
-                    foam2ColumnsLagrangian << nl;
-
                     PtrList<IOField<scalar>> allLagrangianFields(selectedLagrangianFields.size());
+                    PtrList<IOField<vector>> allLagrangianVectorFields(selectedLagrangianFields.size()); // for LagrangianVector, YongnanLiu, 2025.8.27
+                    // 标记每个字段的类型
+                    List<bool> isVector(selectedLagrangianFields.size(), false); // for LagrangianVector, YongnanLiu, 2025.8.27
+
                     forAll(selectedLagrangianFields, fieldI)
                     {
                         const word fieldName = selectedLagrangianFields[fieldI];
@@ -176,8 +167,44 @@ int main(int argc, char *argv[])
                                     fieldIOobject
                                 )
                             );
+                            isVector[fieldI] = false;
+                        }
+                        else if (fieldIOobject.typeHeaderOk<IOField<vector>>(true))  // for LagrangianVector, YongnanLiu, 2025.8.27
+                        {
+                            allLagrangianVectorFields.set
+                            (
+                                fieldI,
+                                new IOField<vector>
+                                (
+                                    fieldIOobject
+                                )
+                            );
+                            isVector[fieldI] = true;
                         }
                     }
+
+                    foam2ColumnsLagrangian
+                        << "x" << "\t"
+                        << "y" << "\t"
+                        << "z" << "\t"
+                        << "origId" << "\t"
+                        << "origProc";
+
+                    forAll (selectedLagrangianFields, fieldI)
+                    {
+                        if (isVector[fieldI])
+                        {
+                            foam2ColumnsLagrangian 
+                                << "\t" << selectedLagrangianFields[fieldI] << "_x"
+                                << "\t" << selectedLagrangianFields[fieldI] << "_y"
+                                << "\t" << selectedLagrangianFields[fieldI] << "_z";
+                        }
+                        else
+                        {
+                            foam2ColumnsLagrangian << "\t" << selectedLagrangianFields[fieldI];
+                        }
+                    }
+                    foam2ColumnsLagrangian << nl; // for LagrangianVector, YongnanLiu, 2025.8.27
 
                     passiveParticleCloud parcels(mesh, cloudDirs[i]);
                     label iParticle(0);
@@ -193,9 +220,20 @@ int main(int argc, char *argv[])
                             << ppi.origId() << "\t"
                             << ppi.origProc();
 
-                        forAll(allLagrangianFields, fieldI)
+                        forAll(selectedLagrangianFields, fieldI)
                         {
-                            foam2ColumnsLagrangian << "\t" << allLagrangianFields[fieldI][iParticle];
+                            if (isVector[fieldI])
+                            {
+                                const vector& v = allLagrangianVectorFields[fieldI][iParticle];
+                                foam2ColumnsLagrangian
+                                    << "\t" << v.x()
+                                    << "\t" << v.y()
+                                    << "\t" << v.z();
+                            }  // for LagrangianVector, YongnanLiu, 2025.8.27
+                            else
+                            {
+                                foam2ColumnsLagrangian << "\t" << allLagrangianFields[fieldI][iParticle];
+                            }
                         }
                         foam2ColumnsLagrangian << nl;
                         iParticle ++;
